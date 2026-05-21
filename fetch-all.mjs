@@ -54,7 +54,7 @@ async function fetchJSON(url, headers = {}, tentativa = 1) {
   }
 }
 
-// ── FUTEBOL ──────────────────────────────────────────────────────────────────
+// ── FUTEBOL ───────────────────────────────────────────────────────────────────
 
 async function fetchLiga(liga) {
   process.stdout.write("  Buscando " + liga.nome + "... ");
@@ -65,13 +65,12 @@ async function fetchLiga(liga) {
     );
     if (data.errorCode) { console.log("Sem acesso."); return []; }
     const jogos = (data.matches || []).map(m => ({
-      id:              "jogo_fd_" + m.id,
-      nome:            m.homeTeam.name + " X " + m.awayTeam.name,
-      category:        "esportes",
-      status:          "active",
-      end_date:        m.utcDate,
-      image_url:       m.homeTeam.crest || null,
-      resolution_rule: "Resultado final de " + m.homeTeam.name + " x " + m.awayTeam.name + ".",
+      id:        "jogo_fd_" + m.id,
+      nome:      m.homeTeam.name + " X " + m.awayTeam.name,
+      category:  "esportes",
+      status:    "active",
+      end_date:  m.utcDate,
+      image_url: m.homeTeam.crest || null,
     }));
     console.log(jogos.length + " jogos.");
     return jogos;
@@ -100,13 +99,12 @@ async function fetchEsporte(sport) {
           ? ev.dateEvent + "T" + ev.strTime + ":00Z"
           : ev.dateEvent + "T00:00:00Z";
         eventos.push({
-          id:              "sdb_" + ev.idEvent,
-          nome:            ev.strEvent,
-          category:        sport.category,
-          status:          "active",
-          end_date:        iso,
-          image_url:       ev.strThumb || null,
-          resolution_rule: "Resultado final de " + ev.strEvent + ".",
+          id:        "sdb_" + ev.idEvent,
+          nome:      ev.strEvent,
+          category:  sport.category,
+          status:    "active",
+          end_date:  iso,
+          image_url: ev.strThumb || null,
         });
       }
     } catch (_) {}
@@ -121,15 +119,13 @@ async function fetchEsporte(sport) {
 
 async function criarPosicoes(ids) {
   if (ids.length === 0) return;
-
-  // Busca os registros inseridos pelo id texto
   const idList = ids.map(id => '"' + id + '"').join(",");
   const res = await fetch(
     SUPABASE_URL + "/rest/v1/markets?id=in.(" + idList + ")&select=id",
     { headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY } }
   );
   const db = await res.json();
-  if (!Array.isArray(db) || db.length === 0) { console.log("  Nenhum market encontrado para posicoes."); return; }
+  if (!Array.isArray(db) || db.length === 0) return;
 
   const pos = [];
   for (const m of db) {
@@ -149,10 +145,10 @@ async function criarPosicoes(ids) {
     await fetch(SUPABASE_URL + "/rest/v1/posicoes", {
       method: "POST",
       headers: {
-        apikey:           SUPABASE_KEY,
-        Authorization:    "Bearer " + SUPABASE_KEY,
-        "Content-Type":   "application/json",
-        Prefer:           "resolution=ignore-duplicates",
+        apikey:         SUPABASE_KEY,
+        Authorization:  "Bearer " + SUPABASE_KEY,
+        "Content-Type": "application/json",
+        Prefer:         "resolution=ignore-duplicates",
       },
       body: JSON.stringify(pos.slice(i, i + 50)),
     });
@@ -170,14 +166,18 @@ async function salvar(markets) {
     const res = await fetch(SUPABASE_URL + "/rest/v1/markets", {
       method: "POST",
       headers: {
-        apikey:           SUPABASE_KEY,
-        Authorization:    "Bearer " + SUPABASE_KEY,
-        "Content-Type":   "application/json",
-        Prefer:           "resolution=merge-duplicates",
+        apikey:         SUPABASE_KEY,
+        Authorization:  "Bearer " + SUPABASE_KEY,
+        "Content-Type": "application/json",
+        Prefer:         "resolution=merge-duplicates",
       },
       body: JSON.stringify(lote),
     });
-    if (!res.ok) { console.error(await res.text()); } else { lote.forEach(m => ids.push(m.id)); }
+    if (!res.ok) {
+      console.error(await res.text());
+    } else {
+      lote.forEach(m => ids.push(m.id));
+    }
   }
 
   await criarPosicoes(ids);

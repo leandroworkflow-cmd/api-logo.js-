@@ -1,38 +1,29 @@
-/**
- * fetch-all.mjs
- * Importador unificado — Football-data.org + TheSportsDB → Supabase
- */
-
 import fetch from "node-fetch";
-
-// ── CONFIG ────────────────────────────────────────────────────────────────────
 
 const FOOTBALL_API_KEY = "ab7e687d7ff24053837db64af9b56453";
 const SUPABASE_URL     = "https://odexmyskaespjusivjua.supabase.co";
 const SUPABASE_KEY     = "sb_publishable_s9oIKQj9UXCPucjw1cmzlw_N3HqxH-Y";
-const SPORTSDB_KEY     = "123"; // troque se tiver premium
+const SPORTSDB_KEY     = "123";
 const DAYS_AHEAD       = 14;
 
 const LIGAS_FUTEBOL = [
-  { code: "BSA", nome: "Brasileirao A"   },
-  { code: "BSB", nome: "Brasileirao B"   },
-  { code: "CLI", nome: "Libertadores"    },
-  { code: "CL",  nome: "Champions League"},
-  { code: "PL",  nome: "Premier League"  },
-  { code: "PD",  nome: "La Liga"         },
-  { code: "SA",  nome: "Serie A"         },
-  { code: "BL1", nome: "Bundesliga"      },
-  { code: "FL1", nome: "Ligue 1"         },
+  { code: "BSA", nome: "Brasileirao A"    },
+  { code: "BSB", nome: "Brasileirao B"    },
+  { code: "CLI", nome: "Libertadores"     },
+  { code: "CL",  nome: "Champions League" },
+  { code: "PL",  nome: "Premier League"   },
+  { code: "PD",  nome: "La Liga"          },
+  { code: "SA",  nome: "Serie A"          },
+  { code: "BL1", nome: "Bundesliga"       },
+  { code: "FL1", nome: "Ligue 1"          },
 ];
 
 const OUTROS_ESPORTES = [
-  { name: "Basketball", label: "Basquete",    category: "basquete"  },
+  { name: "Basketball", label: "Basquete",     category: "basquete" },
   { name: "Fighting",   label: "Boxe/MMA/UFC", category: "luta"     },
   { name: "Tennis",     label: "Tenis",        category: "tenis"    },
   { name: "Volleyball", label: "Volei",        category: "volei"    },
 ];
-
-// ── UTILS ─────────────────────────────────────────────────────────────────────
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -51,7 +42,7 @@ async function fetchJSON(url, headers = {}, tentativa = 1) {
   try {
     const res = await fetch(url, { headers });
     if (res.status === 429) {
-      console.warn("  Rate limit (429). Aguardando 61s...");
+      console.warn("  Rate limit. Aguardando 61s...");
       await sleep(61000);
       return fetchJSON(url, headers, tentativa + 1);
     }
@@ -63,7 +54,7 @@ async function fetchJSON(url, headers = {}, tentativa = 1) {
   }
 }
 
-// ── BUSCA FUTEBOL (football-data.org) ─────────────────────────────────────────
+// ── FUTEBOL ──────────────────────────────────────────────────────────────────
 
 async function fetchLiga(liga) {
   process.stdout.write("  Buscando " + liga.nome + "... ");
@@ -74,20 +65,13 @@ async function fetchLiga(liga) {
     );
     if (data.errorCode) { console.log("Sem acesso."); return []; }
     const jogos = (data.matches || []).map(m => ({
-      external_id:     "jogo_fd_" + m.id,
+      id:              "jogo_fd_" + m.id,
       nome:            m.homeTeam.name + " X " + m.awayTeam.name,
-      time_casa:       m.homeTeam.name,
-      time_fora:       m.awayTeam.name,
-      home_logo:       m.homeTeam.crest || null,
-      away_logo:       m.awayTeam.crest || null,
       category:        "esportes",
       status:          "active",
-      yes_price:       50,
-      no_price:        50,
-      volume:          0,
-      resolution_rule: "Resultado final de " + m.homeTeam.name + " x " + m.awayTeam.name + ".",
       end_date:        m.utcDate,
-      data_evento:     m.utcDate,
+      image_url:       m.homeTeam.crest || null,
+      resolution_rule: "Resultado final de " + m.homeTeam.name + " x " + m.awayTeam.name + ".",
     }));
     console.log(jogos.length + " jogos.");
     return jogos;
@@ -97,13 +81,13 @@ async function fetchLiga(liga) {
   }
 }
 
-// ── BUSCA OUTROS ESPORTES (TheSportsDB) ───────────────────────────────────────
+// ── OUTROS ESPORTES ───────────────────────────────────────────────────────────
 
 async function fetchEsporte(sport) {
   process.stdout.write("  Buscando " + sport.label + "... ");
-  const base   = "https://www.thesportsdb.com/api/v1/json/" + SPORTSDB_KEY;
-  const dates  = nextDates(DAYS_AHEAD);
-  const vistos = new Set();
+  const base    = "https://www.thesportsdb.com/api/v1/json/" + SPORTSDB_KEY;
+  const dates   = nextDates(DAYS_AHEAD);
+  const vistos  = new Set();
   const eventos = [];
 
   for (const date of dates) {
@@ -112,32 +96,17 @@ async function fetchEsporte(sport) {
       for (const ev of (data?.events || [])) {
         if (vistos.has(ev.idEvent)) continue;
         vistos.add(ev.idEvent);
-
-        // Monta data ISO com horário (se existir)
         const iso = ev.strTime
           ? ev.dateEvent + "T" + ev.strTime + ":00Z"
           : ev.dateEvent + "T00:00:00Z";
-
-        // Para lutas (boxe/MMA) não tem "time_casa/fora" no sentido tradicional
-        // usamos os atletas/equipes como home/away
-        const homeTeam = ev.strHomeTeam || ev.strEvent || sport.label;
-        const awayTeam = ev.strAwayTeam || "";
-
         eventos.push({
-          external_id:     "sdb_" + ev.idEvent,
+          id:              "sdb_" + ev.idEvent,
           nome:            ev.strEvent,
-          time_casa:       homeTeam,
-          time_fora:       awayTeam,
-          home_logo:       ev.strHomeTeamBadge || null,
-          away_logo:       ev.strAwayTeamBadge || null,
           category:        sport.category,
           status:          "active",
-          yes_price:       50,
-          no_price:        50,
-          volume:          0,
-          resolution_rule: "Resultado final de " + ev.strEvent + ".",
           end_date:        iso,
-          data_evento:     iso,
+          image_url:       ev.strThumb || null,
+          resolution_rule: "Resultado final de " + ev.strEvent + ".",
         });
       }
     } catch (_) {}
@@ -150,14 +119,18 @@ async function fetchEsporte(sport) {
 
 // ── SALVAR NO SUPABASE ────────────────────────────────────────────────────────
 
-async function criarPosicoes(mercados) {
-  if (mercados.length === 0) return;
-  const ids = mercados.map(m => m.external_id).join(",");
+async function criarPosicoes(ids) {
+  if (ids.length === 0) return;
+
+  // Busca os registros inseridos pelo id texto
+  const idList = ids.map(id => '"' + id + '"').join(",");
   const res = await fetch(
-    SUPABASE_URL + "/rest/v1/mercados?external_id=in.(" + ids + ")&select=id,external_id",
+    SUPABASE_URL + "/rest/v1/markets?id=in.(" + idList + ")&select=id",
     { headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY } }
   );
   const db = await res.json();
+  if (!Array.isArray(db) || db.length === 0) { console.log("  Nenhum market encontrado para posicoes."); return; }
+
   const pos = [];
   for (const m of db) {
     for (const [tipo, preco] of [["time_casa", 0.65], ["empate", 0.20], ["time_fora", 0.15]]) {
@@ -171,15 +144,15 @@ async function criarPosicoes(mercados) {
       });
     }
   }
-  if (pos.length === 0) return;
+
   for (let i = 0; i < pos.length; i += 50) {
     await fetch(SUPABASE_URL + "/rest/v1/posicoes", {
       method: "POST",
       headers: {
-        apikey: SUPABASE_KEY,
-        Authorization:  "Bearer " + SUPABASE_KEY,
-        "Content-Type": "application/json",
-        Prefer:         "resolution=ignore-duplicates",
+        apikey:           SUPABASE_KEY,
+        Authorization:    "Bearer " + SUPABASE_KEY,
+        "Content-Type":   "application/json",
+        Prefer:           "resolution=ignore-duplicates",
       },
       body: JSON.stringify(pos.slice(i, i + 50)),
     });
@@ -187,23 +160,27 @@ async function criarPosicoes(mercados) {
   console.log("  " + pos.length + " posicoes criadas.");
 }
 
-async function salvar(mercados) {
-  if (mercados.length === 0) { console.log("Nenhum mercado."); return; }
-  console.log("\nSalvando " + mercados.length + " markets...");
-  for (let i = 0; i < mercados.length; i += 50) {
-    const res = await fetch(SUPABASE_URL + "/rest/v1/mercados", {
+async function salvar(markets) {
+  if (markets.length === 0) { console.log("Nenhum market."); return; }
+  console.log("\nSalvando " + markets.length + " markets...");
+
+  const ids = [];
+  for (let i = 0; i < markets.length; i += 50) {
+    const lote = markets.slice(i, i + 50);
+    const res = await fetch(SUPABASE_URL + "/rest/v1/markets", {
       method: "POST",
       headers: {
-        apikey: SUPABASE_KEY,
-        Authorization:  "Bearer " + SUPABASE_KEY,
-        "Content-Type": "application/json",
-        Prefer:         "resolution=merge-duplicates",
+        apikey:           SUPABASE_KEY,
+        Authorization:    "Bearer " + SUPABASE_KEY,
+        "Content-Type":   "application/json",
+        Prefer:           "resolution=merge-duplicates",
       },
-      body: JSON.stringify(mercados.slice(i, i + 50)),
+      body: JSON.stringify(lote),
     });
-    if (!res.ok) console.error(await res.text());
+    if (!res.ok) { console.error(await res.text()); } else { lote.forEach(m => ids.push(m.id)); }
   }
-  await criarPosicoes(mercados);
+
+  await criarPosicoes(ids);
   console.log("Salvo!");
 }
 
@@ -211,17 +188,14 @@ async function salvar(mercados) {
 
 (async () => {
   console.log("=== Importador Unificado de Esportes ===");
-
   const todos = [];
 
-  // Futebol
   console.log("\n[Futebol — football-data.org]");
   for (const liga of LIGAS_FUTEBOL) {
     todos.push(...await fetchLiga(liga));
     await sleep(500);
   }
 
-  // Outros esportes
   console.log("\n[Outros Esportes — TheSportsDB]");
   for (const sport of OUTROS_ESPORTES) {
     todos.push(...await fetchEsporte(sport));
